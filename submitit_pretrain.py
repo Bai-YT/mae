@@ -12,19 +12,25 @@ import os
 import uuid
 from pathlib import Path
 
-import main_pretrain as trainer
+import main_pretrain
 import submitit
+    
+import torch
+import random
+import numpy as np
+import os
+import torch.multiprocessing as mp
 
 
 def parse_args():
-    trainer_parser = trainer.get_args_parser()
+    trainer_parser = main_pretrain.get_args_parser()
     parser = argparse.ArgumentParser("Submitit for MAE pretrain", parents=[trainer_parser])
     parser.add_argument("--ngpus", default=8, type=int, help="Number of gpus to request on each node")
     parser.add_argument("--nodes", default=2, type=int, help="Number of nodes to request")
-    parser.add_argument("--timeout", default=4320, type=int, help="Duration of the job")
+    parser.add_argument("--timeout", default=14400, type=int, help="Duration of the job")
     parser.add_argument("--job_dir", default="", type=str, help="Job dir. Leave empty for automatic.")
 
-    parser.add_argument("--partition", default="learnfair", type=str, help="Partition where to submit")
+    parser.add_argument("--partition", default="gpu", type=str, help="Partition where to submit")
     parser.add_argument("--use_volta32", action='store_true', help="Request 32G V100 GPUs")
     parser.add_argument('--comment', default="", type=str, help="Comment to pass to scheduler")
     return parser.parse_args()
@@ -32,10 +38,10 @@ def parse_args():
 
 def get_shared_folder() -> Path:
     user = os.getenv("USER")
-    if Path("/checkpoint/").is_dir():
-        p = Path(f"/checkpoint/{user}/experiments")
-        p.mkdir(exist_ok=True)
-        return p
+    if Path("/home/ubuntu/project/MAE/checkpoint/").is_dir():
+        pa = Path(f"/home/ubuntu/project/MAE/checkpoint/{user}/experiments")
+        pa.mkdir(parents=True, exist_ok=True)
+        return pa
     raise RuntimeError("No shared folder available")
 
 
@@ -53,10 +59,10 @@ class Trainer(object):
         self.args = args
 
     def __call__(self):
-        import main_pretrain as trainer
+        import main_pretrain
 
         self._setup_gpu_args()
-        trainer.main(self.args)
+        main_pretrain.main(self.args)
 
     def checkpoint(self):
         import os
@@ -89,7 +95,7 @@ def main():
         args.job_dir = get_shared_folder() / "%j"
 
     # Note that the folder will depend on the job_id, to easily track experiments
-    executor = submitit.AutoExecutor(folder=args.job_dir, slurm_max_num_timeout=30)
+    executor = submitit.LocalExecutor(folder=args.job_dir)
 
     num_gpus_per_node = args.ngpus
     nodes = args.nodes
@@ -103,15 +109,12 @@ def main():
         kwargs['slurm_comment'] = args.comment
 
     executor.update_parameters(
-        mem_gb=40 * num_gpus_per_node,
+        # mem_gb=40 * num_gpus_per_node,
         gpus_per_node=num_gpus_per_node,
         tasks_per_node=num_gpus_per_node,  # one task per GPU
         cpus_per_task=10,
         nodes=nodes,
         timeout_min=timeout_min,  # max is 60 * 72
-        # Below are cluster dependent parameters
-        slurm_partition=partition,
-        slurm_signal_delay_s=120,
         **kwargs
     )
 
@@ -122,9 +125,25 @@ def main():
 
     trainer = Trainer(args)
     job = executor.submit(trainer)
+    print("Submitted job_id:", job.job_id)
 
-    # print("Submitted job_id:", job.job_id)
-    print(job.job_id)
+
+def main_():
+    args = parse_args()
+    if args.job_dir == "":
+        args.job_dir = get_shared_folder() / "%j"
+
+    # Number of GPUs
+    assert args.nodes == 1
+    num_gpus = args.ngpus
+    print("Number of GPUs:", num_gpus)
+    os.environ['MASTER_ADDR'] = '100.64.214.173'
+    os.environ['MASTER_PORT'] = '8840'
+
+    # Start DDP training
+    args.dist_url = get_init_file().as_uri()
+    args.output_dir = args.job_dir
+    mp.spawn(main_pretrain.main, nprocs=num_gpus, args=[args])
 
 
 if __name__ == "__main__":

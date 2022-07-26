@@ -37,6 +37,7 @@ from util.crop import RandomResizedCrop
 import models_vit
 
 from engine_finetune import train_one_epoch, evaluate
+from util.lgs_dataset import LGS12MDataset, LGS1MDataset, lgs_collate
 
 
 def get_args_parser():
@@ -48,8 +49,8 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='vit_large_patch16', type=str, metavar='MODEL',
-                        help='Name of model to train')
+    parser.add_argument('--model', default='vit_large_patch16', type=str, metavar='MODEL', help='Name of model to train')
+    parser.add_argument('--dataset', default='in1k', type=str, metavar='DATASET', help='Linear probing dataset')
 
     # Optimizer parameters
     parser.add_argument('--weight_decay', type=float, default=0,
@@ -96,6 +97,7 @@ def get_args_parser():
                         help='Perform evaluation only')
     parser.add_argument('--dist_eval', action='store_true', default=False,
                         help='Enabling distributed evaluation (recommended during training for faster monitor')
+                        
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
@@ -106,15 +108,20 @@ def get_args_parser():
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
     parser.add_argument('--local_rank', default=-1, type=int)
-    parser.add_argument('--dist_on_itp', action='store_true')
-    parser.add_argument('--dist_url', default='env://',
-                        help='url used to set up distributed training')
+    # parser.add_argument('--dist_on_itp', action='store_true')
+    # parser.add_argument('--dist_url', default='env://',
+    #                     help='url used to set up distributed training')
 
     return parser
 
 
 def main(args):
     misc.init_distributed_mode(args)
+    max_threads = 8  # For P3
+    # max_threads = 24  # For G5
+    print(f"Allowing a maximum of {max_threads} CPU workers per GPU.")
+    os.environ["OMP_NUM_THREADS"] = str(max_threads)
+    torch.set_num_threads(max_threads)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
@@ -130,17 +137,38 @@ def main(args):
 
     # linear probe: weak augmentation
     transform_train = transforms.Compose([
-            RandomResizedCrop(224, interpolation=3),
+            RandomResizedCrop(224, interpolation=transforms.InterpolationMode.BICUBIC),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     transform_val = transforms.Compose([
-            transforms.Resize(256, interpolation=3),
+            transforms.Resize(256, interpolation=transforms.InterpolationMode.BICUBIC),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    dataset_val = datasets.ImageFolder(os.path.join(args.data_path, 'val'), transform=transform_val)
+    if args.dataset == 'in1k':
+        dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+        dataset_val = datasets.ImageFolder(os.path.join(args.data_path, 'val'), transform=transform_val)
+    elif args.dataset == 'lgs710':
+        dataset_train = LGS12MDataset(pkl_file=os.path.join(args.data_path, "LGS_710/LGS-710_train.pkl"), 
+                                      root_dir=os.path.join(args.data_path, "images/imgs_256_04_27"),
+                                      transform=transform_train)
+        dataset_val = LGS12MDataset(pkl_file=os.path.join(args.data_path, "LGS_710/LGS-710_val.pkl"), 
+                                    root_dir=os.path.join(args.data_path, "images/imgs_256_04_27"),
+                                    transform=transform_val,
+                                    dicts={'encode': dataset_train.encode_dict,
+                                           'decode': dataset_train.decode_dict})
+    elif args.dataset == 'lgs117':
+        dataset_train = LGS1MDataset(csv_file=os.path.join(args.data_path, "LGS_117/taxonomy_balanced_dataset_1M_train.csv"), 
+                                     root_dir=os.path.join(args.data_path, "images/imgs_256_04_27"),
+                                     transform=transform_train)
+        dataset_val = LGS1MDataset(csv_file=os.path.join(args.data_path, "LGS_117/taxonomy_balanced_dataset_1M_val.csv"), 
+                                   root_dir=os.path.join(args.data_path, "images/imgs_256_04_27"),
+                                   transform=transform_val)
+    else:
+        raise ValueError("Unknown Dataset.")
+    print(len(dataset_train))
+    print(len(dataset_val))
     print(dataset_train)
     print(dataset_val)
 
@@ -174,6 +202,7 @@ def main(args):
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        collate_fn=lgs_collate,
         pin_memory=args.pin_mem,
         drop_last=True,
     )
@@ -182,6 +211,7 @@ def main(args):
         dataset_val, sampler=sampler_val,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        collate_fn=lgs_collate,
         pin_memory=args.pin_mem,
         drop_last=False
     )

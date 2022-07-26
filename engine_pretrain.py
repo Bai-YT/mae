@@ -21,7 +21,7 @@ import util.lr_sched as lr_sched
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler,
-                    log_writer=None,
+                    log_writer=None, debug=False,
                     args=None):
     model.train(True)
     metric_logger = misc.MetricLogger(delimiter="  ")
@@ -31,22 +31,28 @@ def train_one_epoch(model: torch.nn.Module,
 
     accum_iter = args.accum_iter
 
-    optimizer.zero_grad()
-
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
 
-    for data_iter_step, (samples, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    optimizer.zero_grad()
+    it1 = enumerate(metric_logger.log_every(zip(data_loader[0], data_loader[1]), 
+                    print_freq, header, length=len(data_loader[0])))  # IN and LGS
+    it2 = enumerate(metric_logger.log_every(data_loader[0], print_freq, header))  # IN only
+    print("Training with", ("LGS+IN1k." if args.use_lgs else "IN1k only."))
 
+    for data_iter_step, ba in (it1 if args.use_lgs else it2):
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
-            lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
+            lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader[0]) + epoch, args)
 
-        samples = samples.to(device, non_blocking=True)
+        if args.use_lgs:
+            samples_in, samples_lgs = ba
+            samples = torch.cat([samples_in[0], samples_lgs[0]], dim=0).to(device, non_blocking=True)
+        else:
+            samples = ba[0].to(device, non_blocking=True)
 
         with torch.cuda.amp.autocast():
             loss, _, _ = model(samples, mask_ratio=args.mask_ratio)
-
         loss_value = loss.item()
 
         if not math.isfinite(loss_value):
@@ -61,10 +67,9 @@ def train_one_epoch(model: torch.nn.Module,
 
         torch.cuda.synchronize()
 
-        metric_logger.update(loss=loss_value)
-
         lr = optimizer.param_groups[0]["lr"]
         metric_logger.update(lr=lr)
+        metric_logger.update(loss=loss_value)
 
         loss_value_reduce = misc.all_reduce_mean(loss_value)
         if log_writer is not None and (data_iter_step + 1) % accum_iter == 0:
@@ -74,7 +79,8 @@ def train_one_epoch(model: torch.nn.Module,
             epoch_1000x = int((data_iter_step / len(data_loader) + epoch) * 1000)
             log_writer.add_scalar('train_loss', loss_value_reduce, epoch_1000x)
             log_writer.add_scalar('lr', lr, epoch_1000x)
-
+        if debug and data_iter_step > 20:
+            break
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()

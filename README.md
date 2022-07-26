@@ -1,3 +1,5 @@
+This folder is a copy of https://github.com/facebookresearch/mae.
+
 ## Masked Autoencoders: A PyTorch Implementation
 
 <p align="center">
