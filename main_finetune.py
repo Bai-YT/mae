@@ -157,6 +157,11 @@ def get_args_parser():
 
 def main(args):
     misc.init_distributed_mode(args)
+    max_threads = 8  # For P3
+    # max_threads = 24  # For G5
+    print(f"Allowing a maximum of {max_threads} CPU workers per GPU.")
+    os.environ["OMP_NUM_THREADS"] = str(max_threads)
+    torch.set_num_threads(max_threads)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
