@@ -117,8 +117,7 @@ def get_args_parser():
 
 def main(args):
     misc.init_distributed_mode(args)
-    max_threads = 8  # For P3
-    # max_threads = 24  # For G5
+    max_threads = int(os.cpu_count() // torch.cuda.device_count())  # 8 for P3, 24 for G5
     print(f"Allowing a maximum of {max_threads} CPU workers per GPU.")
     os.environ["OMP_NUM_THREADS"] = str(max_threads)
     torch.set_num_threads(max_threads)

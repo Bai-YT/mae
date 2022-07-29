@@ -157,6 +157,9 @@ python3 -m torch.distributed.launch  --nproc_per_node=4  --nnodes=1  --node_rank
 ```
 python3 -m torch.distributed.launch  --nproc_per_node=8  --nnodes=1  --node_rank=0  --master_addr=100.64.229.103  --master_port=4000  main_linprobe.py  --batch_size 1024  --accum_iter 2  --num_workers 7  --model vit_base_patch16  --dataset 'in1k'  --epochs 60  --blr 0.1  --weight_decay 0.0  --pin_mem  --dist_eval  --data_path "/home/ubuntu/project/data/IN_data"  --nb_classes 1000  --log_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained_balanced/linprob_in1k/"  --output_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained_balanced/linprob_in1k/"  --finetune "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained_balanced/checkpoint-149.pth"
 ```
+```
+python3 -m torch.distributed.launch  --nproc_per_node=8  --nnodes=1  --node_rank=0  --master_addr=100.64.214.173  --master_port=4000  main_linprobe.py  --batch_size 2048  --accum_iter 1  --num_workers 10  --model vit_base_patch16  --dataset 'in1k'  --epochs 60  --blr 0.1  --weight_decay 0.0  --pin_mem  --dist_eval  --data_path "/home/ubuntu/project/data/IN_data"  --nb_classes 1000  --log_dir "/home/ubuntu/project/MAE/LGS+IN/norm_loss/linprob_in1k/"  --output_dir "/home/ubuntu/project/MAE/LGS+IN/norm_loss/linprob_in1k/"  --finetune "/home/ubuntu/project/MAE/LGS+IN/norm_loss/checkpoint-399.pth"
+```
 - Here the effective batch size is 512 (`batch_size` per gpu) * 4 (`nodes`) * 8 (gpus per node) = 16384.
 - `blr` is the base learning rate. The actual `lr` is computed by the [linear scaling rule](https://arxiv.org/abs/1706.02677): `lr` = `blr` * effective batch size / 256.
 - Training time is ~2h20m for 90 epochs in 32 V100 GPUs.
