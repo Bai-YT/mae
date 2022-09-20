@@ -106,11 +106,47 @@ class LGS12MDataset(Dataset):
             print("An error occured when loading image", img_name)
             return None
 
+
+class LGSFullDataset(Dataset):
+    """LGS dataset."""
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    def __init__(self, pkl_file, root_dir, transform=None):
+        """
+        Args:
+            pkl_file (string): Path to the pkl file with the annotations.
+            root_dir (string): Directory with all LGS images.
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+        super().__init__()
+        print("Initializing LGS dataset...")
+
+        with open(pkl_file, 'rb') as load_f:
+            self.lgs_df = pickle.load(load_f)
+        print("Done loading.")
+        self.root_dir = root_dir
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.lgs_df)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        img_name = self.lgs_df.iloc[idx, 0]
+
+        try:
+            image = Image.open(os.path.join(self.root_dir, img_name))
+            width, height = image.size
+            if self.transform:
+                image = self.transform(image)
+            return image, width, height, idx
+        except:
+            print("An error occured when loading image", img_name)
+            print("The index is", idx)
+            return None
+
+
 def lgs_collate(batch):
-    len_batch = len(batch) # original batch length
     batch = list(filter (lambda x: x is not None, batch)) # filter out all the Nones
-    if len_batch > len(batch): # if there are samples missing just use existing members, doesn't work if you reject every sample in a batch
-        diff = len_batch - len(batch)
-        for i in range(diff):
-            batch = batch + batch[:diff]
     return torch.utils.data.dataloader.default_collate(batch)

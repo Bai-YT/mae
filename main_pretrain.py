@@ -29,7 +29,7 @@ import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
-from util.lgs_dataset import LGS12MDataset, lgs_collate
+from util.lgs_dataset import LGSFullDataset, lgs_collate
 from util.distributed_weighted_sampler import DistributedWeightedSampler
 
 import models_mae
@@ -69,8 +69,10 @@ def get_args_parser():
     # Dataset parameters
     parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
                         help='dataset path')
-    parser.add_argument('--use_lgs', action='store_true', help='Use LGS+IN1k.')
+    parser.add_argument('--use_lgs', action='store_true', help='Use LGS.')
     parser.set_defaults(use_lgs=False)
+    parser.add_argument('--use_in', action='store_true', help='Use IN1k.')
+    parser.set_defaults(use_in=False)
     parser.add_argument('--weighted_lgs', action='store_true', help='Use weighted distributed sampler for LGS.')
     parser.set_defaults(weighted_lgs=False)
 
@@ -100,8 +102,8 @@ def get_args_parser():
 
 def main(args):
     misc.init_distributed_mode(args)
-    max_threads = 8  # For P3
-    # max_threads = 24  # For G5
+    # max_threads = 8  # For P3
+    max_threads = 24  # For G5
     print(f"Allowing a maximum of {max_threads} CPU workers per GPU.")
     os.environ["OMP_NUM_THREADS"] = str(max_threads)
     torch.set_num_threads(max_threads)
@@ -129,11 +131,12 @@ def main(args):
     data_paths = args.data_path.split("; ")
     dataset_train = [datasets.ImageFolder(os.path.join(data_paths[0], 'train'), 
                                           transform=transform_train),
-                     LGS12MDataset(pkl_file=os.path.join(data_paths[1], "LGS_710/LGS-710_train.pkl"), 
-                                   root_dir=os.path.join(data_paths[1], "images/imgs_256_04_27"),
-                                   transform=transform_train)]
-    print(dataset_train[0])
-    print(dataset_train[1])
+                     LGSFullDataset(pkl_file=os.path.join(data_paths[1], "raw/instances_LGS_08_09.pkl"), 
+                                    root_dir=os.path.join(data_paths[1], "images/imgs_256_04_27"),
+                                    transform=transform_train)]
+    # print(dataset_train[0])
+    # print(dataset_train[1])
+    print(f"Use LGS: {args.use_lgs}; use IN1k: {args.use_in}.")
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()

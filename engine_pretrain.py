@@ -38,14 +38,16 @@ def train_one_epoch(model: torch.nn.Module,
     it1 = enumerate(metric_logger.log_every(zip(data_loader[0], data_loader[1]), 
                     print_freq, header, length=len(data_loader[0])))  # IN and LGS
     it2 = enumerate(metric_logger.log_every(data_loader[0], print_freq, header))  # IN only
-    print("Training with", ("LGS+IN1k." if args.use_lgs else "IN1k only."))
+    it3 = enumerate(metric_logger.log_every(data_loader[1], print_freq, header))  # LGS only
+    print(f"Training with {'LGS ' if args.use_lgs else ''}{'IN' if args.use_in else ''}")
 
-    for data_iter_step, ba in (it1 if args.use_lgs else it2):
+    for data_iter_step, ba in (it1 if (args.use_lgs and args.use_in) else (it2 if args.use_in else it3)):
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
-            lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader[0]) + epoch, args)
+            lr_sched.adjust_learning_rate(optimizer, 
+                data_iter_step / len(data_loader[0 if args.use_in else 1]) + epoch, args)
 
-        if args.use_lgs:
+        if args.use_lgs and args.use_in:
             samples_in, samples_lgs = ba
             samples = torch.cat([samples_in[0], samples_lgs[0]], dim=0).to(device, non_blocking=True)
         else:
