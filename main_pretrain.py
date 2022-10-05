@@ -23,7 +23,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import timm
-
 assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
