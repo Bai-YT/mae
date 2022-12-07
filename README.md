@@ -1,4 +1,4 @@
-This folder is a copy of https://github.com/facebookresearch/mae.
+## This folder is a modified copy of the [Masked AutoEncoder repository](https://github.com/facebookresearch/mae).
 
 ## Masked Autoencoders: A PyTorch Implementation
 

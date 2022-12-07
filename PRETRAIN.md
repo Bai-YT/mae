@@ -73,9 +73,13 @@ python3.10 -m torch.distributed.launch \
 
 Re-pretrain based on the official ImageNet model (no norm pix loss):
 ```
-python3 -m torch.distributed.launch  --nproc_per_node=8  --nnodes=1  --node_rank=0  --master_addr=100.64.214.173  --master_port=8840  main_pretrain.py  --batch_size 85  --accum_iter 3  --num_workers 2  --model mae_vit_base_patch16  --mask_ratio 0.75  --epochs 150  --warmup_epochs 20  --blr 1e-4  --weight_decay 0.05  --pin_mem  --data_path "/home/ubuntu/project/data/IN_data; /home/ubuntu/project/data/LGS"  --use_lgs  --log_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained/"  --output_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained/"  --resume "/home/ubuntu/project/MAE/IN/official/mae_visualize_vit_base.pth"
+python3 -m torch.distributed.launch  --nproc_per_node=8  --nnodes=1  --node_rank=0  --master_addr=100.64.214.173  --master_port=8840  main_pretrain.py  --batch_size 128  --accum_iter 2  --num_workers 2  --model mae_vit_base_patch16  --mask_ratio 0.75  --epochs 150  --warmup_epochs 8  --blr 1e-4  --weight_decay 0.05  --pin_mem  --data_path "/home/ubuntu/project/data/IN_data; /home/ubuntu/project/data/LGS"  --use_in  --use_lgs  --log_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained/"  --output_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained/"  --resume "/home/ubuntu/project/MAE/IN/official/mae_visualize_vit_base.pth"
 ```
-With balanced LGS:
+LGS only (warmup 2 epochs):  0.001600
+```
+python3 -m torch.distributed.launch  --nproc_per_node=8  --nnodes=1  --node_rank=0  --master_addr=100.64.214.173  --master_port=8840  main_pretrain.py  --batch_size 128  --accum_iter 2  --num_workers 3  --model mae_vit_base_patch16  --mask_ratio 0.75  --epochs 40  --warmup_epochs 10  --blr 1e-4  --weight_decay 0.05  --pin_mem  --data_path "/home/ubuntu/project/data/IN_data; /home/ubuntu/project/data/LGS"  --use_lgs  --log_dir "/home/ubuntu/project/MAE/LGS/nonorm_loss_from_scratch/"  --output_dir "/home/ubuntu/project/MAE/LGS/nonorm_loss_from_scratch/"
+```
+With balanced LGS (need to switch to LGS-710 instead of full LGS):
 ```
 python3 -m torch.distributed.launch  --nproc_per_node=8  --nnodes=1  --node_rank=0  --master_addr=100.64.229.103  --master_port=4000  main_pretrain.py  --batch_size 64  --accum_iter 4  --num_workers 4  --model mae_vit_base_patch16  --mask_ratio 0.75  --epochs 150  --warmup_epochs 20  --blr 1e-4  --weight_decay 0.05  --pin_mem  --data_path "/home/ubuntu/project/data/IN_data; /home/ubuntu/project/data/LGS"  --use_lgs  --weighted_lgs  --log_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained_balanced/"  --output_dir "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained_balanced/"  --resume "/home/ubuntu/project/MAE/LGS+IN/nonorm_loss_pretrained_balanced/checkpoint-1.pth"  --start_epoch 2
 ```
